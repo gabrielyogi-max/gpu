@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import WebGPURenderer from 'three/addons/renderers/webgpu/WebGPURenderer.js';
+
+// WebGPURenderer será carregado dinamicamente para evitar 404
+let WebGPURenderer = null;
 
 let camera, scene, renderer;
 let controls;
@@ -27,27 +29,14 @@ async function init() {
 
     // 2. Camera Setup
     camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
-    camera.position.set(0, 5, 20); 
+    camera.position.set(0, 5, 20);
 
-    // 3. Renderer Setup (WebGPU -> WebGL Fallback)
-    try {
-        if (navigator.gpu) {
-            renderer = new WebGPURenderer({ antialias: true });
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            console.log('WebGPURenderer initialized.');
-            statusText.innerText = 'SYSTEM ONLINE :: WEBGPU';
-        } else {
-            throw new Error('WebGPU not supported');
-        }
-    } catch (e) {
-        console.warn('Falling back to WebGLRenderer:', e);
-        statusText.innerText = 'SYSTEM ONLINE :: WEBGL MODE';
-        renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-    
+    // 3. Renderer Setup (WebGL)
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    statusText.innerText = 'SYSTEM ONLINE :: WEBGL';
+
     renderer.toneMapping = THREE.ReinhardToneMapping;
     container.appendChild(renderer.domElement);
 
@@ -55,9 +44,9 @@ async function init() {
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.enableZoom = false;
-    
+
     // 5. Lighting
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.5); 
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.5);
     scene.add(hemiLight);
 
     const blueLight = new THREE.PointLight(0x00ffff, 800, 100);
@@ -67,14 +56,14 @@ async function init() {
     const pinkLight = new THREE.PointLight(0xff00ff, 800, 100);
     pinkLight.position.set(-20, 10, -20);
     scene.add(pinkLight);
-    
+
     // 6. Environment
     createEnvironment();
     createRain();
 
     // 7. Events
     window.addEventListener('resize', onWindowResize);
-    
+
     // 8. Loop
     renderer.setAnimationLoop(animate);
 }
@@ -83,9 +72,9 @@ function createEnvironment() {
     // Infinite Grid
     const gridSize = 2000;
     const gridDivisions = 300;
-    const gridColorCenter = 0xff00ff; 
-    const gridColorGrid = 0x00aaff;   
-    
+    const gridColorCenter = 0xff00ff;
+    const gridColorGrid = 0x00aaff;
+
     const grid = new THREE.GridHelper(gridSize, gridDivisions, gridColorCenter, gridColorGrid);
     grid.position.y = -0.1;
     grid.material.opacity = 0.3;
@@ -94,8 +83,8 @@ function createEnvironment() {
 
     // Buildings
     const geometry = new THREE.BoxGeometry(1, 1, 1);
-    geometry.translate(0, 0.5, 0); 
-    
+    geometry.translate(0, 0.5, 0);
+
     const material = new THREE.MeshStandardMaterial({
         color: 0x050505,
         roughness: 0.2,
@@ -106,30 +95,30 @@ function createEnvironment() {
 
     const count = 2000;
     const mesh = new THREE.InstancedMesh(geometry, material, count);
-    
+
     const dummy = new THREE.Object3D();
     const _color = new THREE.Color();
 
     for (let i = 0; i < count; i++) {
         const x = (Math.random() - 0.5) * 400;
-        const z = (Math.random() - 0.5) * 1000; 
-        
+        const z = (Math.random() - 0.5) * 1000;
+
         if (Math.abs(x) < 8) continue; // Wider path
 
-        const sy = Math.random() * 30 + 5; 
-        
+        const sy = Math.random() * 30 + 5;
+
         dummy.position.set(x, 0, z);
         dummy.scale.set(Math.random() * 5 + 2, sy, Math.random() * 5 + 2);
         dummy.updateMatrix();
-        
+
         mesh.setMatrixAt(i, dummy.matrix);
-        
+
         if (Math.random() > 0.9) {
-             mesh.setColorAt(i, _color.setHex(0xff00ff)); 
+            mesh.setColorAt(i, _color.setHex(0xff00ff));
         } else if (Math.random() > 0.9) {
-             mesh.setColorAt(i, _color.setHex(0x00ffff));
+            mesh.setColorAt(i, _color.setHex(0x00ffff));
         } else {
-             mesh.setColorAt(i, _color.setHex(0x111111));
+            mesh.setColorAt(i, _color.setHex(0x111111));
         }
     }
 
@@ -144,15 +133,15 @@ function createRain() {
     rainVelocities = new Float32Array(rainCount);
 
     for (let i = 0; i < rainCount; i++) {
-        rainPositions[i * 3] = (Math.random() - 0.5) * 400; 
-        rainPositions[i * 3 + 1] = Math.random() * 200;     
-        rainPositions[i * 3 + 2] = (Math.random() - 0.5) * 400; 
-        
+        rainPositions[i * 3] = (Math.random() - 0.5) * 400;
+        rainPositions[i * 3 + 1] = Math.random() * 200;
+        rainPositions[i * 3 + 2] = (Math.random() - 0.5) * 400;
+
         rainVelocities[i] = 1.0 + Math.random() * 1.5; // Faster rain
     }
 
     rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
-    
+
     const rainMat = new THREE.PointsMaterial({
         color: 0x00ffff, // CYAN RAIN
         size: 0.4,       // BIGGER DROPS
@@ -177,7 +166,7 @@ function animate() {
 
     // Cinematic Camera Movement - FASTER
     camera.position.z -= 0.8; // High speed
-    
+
     if (camera.position.z < -400) {
         camera.position.z = 400;
     }
