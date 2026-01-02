@@ -4,31 +4,55 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NEON FUTURE | Cyberpunk Experience</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;500;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <style>
-        body { margin: 0; overflow: hidden; background-color: #000; color: #fff; font-family: 'Courier New', Courier, monospace; }
-        #canvas-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
-        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; pointer-events: none; display: flex; flex-direction: column; justify-content: center; align-items: center; }
-        h1 { font-size: 5rem; text-transform: uppercase; letter-spacing: 0.5rem; text-shadow: 0 0 10px #0ff, 0 0 20px #0ff, 0 0 40px #0ff; margin: 0; mix-blend-mode: screen; }
-        p { font-size: 1.5rem; color: #f0f; text-shadow: 0 0 5px #f0f; margin-top: 1rem; }
-        .glitch { position: relative; }
-        .glitch::before, .glitch::after { content: attr(data-text); position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #000; }
-        .glitch::before { left: 2px; text-shadow: -1px 0 #ff00c1; clip: rect(44px, 450px, 56px, 0); animation: glitch-anim-1 5s infinite linear alternate-reverse; }
-        .glitch::after { left: -2px; text-shadow: -1px 0 #00fff9; clip: rect(44px, 450px, 56px, 0); animation: glitch-anim-2 5s infinite linear alternate-reverse; }
-        @keyframes glitch-anim-1 { 0% { clip: rect(30px, 9999px, 10px, 0); } 100% { clip: rect(80px, 9999px, 90px, 0); } }
-        @keyframes glitch-anim-2 { 0% { clip: rect(10px, 9999px, 80px, 0); } 100% { clip: rect(30px, 9999px, 10px, 0); } }
-        #loading { position: absolute; bottom: 20px; right: 20px; font-size: 0.8rem; color: #666; }
-    </style>
 </head>
 <body>
     <div id="canvas-container"></div>
+    
+    <!-- Overlay UI -->
     <div id="ui-layer">
-        <h1 class="glitch" data-text="NEON FUTURE">NEON FUTURE</h1>
-        <p id="status">INITIALIZING SYSTEM...</p>
+        <!-- Scanlines effect -->
+        <div class="scanlines"></div>
+        
+        <!-- Vignette -->
+        <div class="vignette"></div>
+        
+        <!-- Top bar -->
+        <div class="top-bar">
+            <div class="corner-decoration top-left"></div>
+            <div class="corner-decoration top-right"></div>
+        </div>
+        
+        <!-- Main Title -->
+        <div class="title-container">
+            <div class="subtitle-top">WELCOME TO THE</div>
+            <h1 class="glitch" data-text="NEON FUTURE">NEON FUTURE</h1>
+            <div class="subtitle">
+                <span class="line"></span>
+                <span id="status">INITIALIZING</span>
+                <span class="line"></span>
+            </div>
+        </div>
+        
+        <!-- Bottom info -->
+        <div class="bottom-bar">
+            <div class="info-block left">
+                <span class="label">LOCATION</span>
+                <span class="value">NEO TOKYO // 2077</span>
+            </div>
+            <div class="info-block center">
+                <span class="label">SYSTEM</span>
+                <span class="value" id="renderer-info">WEBGL 2.0</span>
+            </div>
+            <div class="info-block right">
+                <span class="label">STATUS</span>
+                <span class="value online">● ONLINE</span>
+            </div>
+        </div>
     </div>
-    <div id="loading">Initializing Neural Link...</div>
 
-    <!-- Import Map to handle Three.js modules easily -->
     <script type="importmap">
         {
             "imports": {
