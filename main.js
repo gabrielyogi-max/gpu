@@ -1,19 +1,18 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
-// WebGPURenderer será carregado dinamicamente para evitar 404
-let WebGPURenderer = null;
-
-let camera, scene, renderer;
+let camera, scene, renderer, composer;
 let controls;
 let clock;
 
 // Objects
-let gridHelper;
-let cityGroup;
 let rainSystem;
 let rainPositions;
 let rainVelocities;
+let neonSigns = [];
 
 init();
 
@@ -24,172 +23,397 @@ async function init() {
 
     // 1. Scene Setup
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x050510); // Slightly lighter black for depth
-    scene.fog = new THREE.FogExp2(0x050510, 0.025); // Dense fog
+    scene.background = new THREE.Color(0x020208);
+    scene.fog = new THREE.FogExp2(0x020208, 0.015);
 
     // 2. Camera Setup
-    camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2000);
-    camera.position.set(0, 5, 20);
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 2000);
+    camera.position.set(0, 8, 30);
 
-    // 3. Renderer Setup (WebGL)
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
+    // 3. Renderer Setup
+    renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        powerPreference: "high-performance"
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
-    statusText.innerText = 'SYSTEM ONLINE :: WEBGL';
-
-    renderer.toneMapping = THREE.ReinhardToneMapping;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.5;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(renderer.domElement);
 
-    // 4. Controls
+    // 4. Post Processing - BLOOM!
+    composer = new EffectComposer(renderer);
+    const renderPass = new RenderPass(scene, camera);
+    composer.addPass(renderPass);
+
+    const bloomPass = new UnrealBloomPass(
+        new THREE.Vector2(window.innerWidth, window.innerHeight),
+        1.5,    // strength
+        0.4,    // radius
+        0.85    // threshold
+    );
+    composer.addPass(bloomPass);
+
+    // 5. Controls
     controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
     controls.enableZoom = false;
+    controls.enablePan = false;
+    controls.maxPolarAngle = Math.PI / 2;
 
-    // 5. Lighting
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.5);
-    scene.add(hemiLight);
+    // 6. Lighting
+    const ambientLight = new THREE.AmbientLight(0x111122, 0.3);
+    scene.add(ambientLight);
 
-    const blueLight = new THREE.PointLight(0x00ffff, 800, 100);
-    blueLight.position.set(20, 20, 20);
-    scene.add(blueLight);
+    // Main Neon Lights
+    const cyanLight = new THREE.PointLight(0x00ffff, 2000, 150);
+    cyanLight.position.set(30, 30, 20);
+    scene.add(cyanLight);
 
-    const pinkLight = new THREE.PointLight(0xff00ff, 800, 100);
-    pinkLight.position.set(-20, 10, -20);
-    scene.add(pinkLight);
+    const magentaLight = new THREE.PointLight(0xff00ff, 2000, 150);
+    magentaLight.position.set(-30, 20, -20);
+    scene.add(magentaLight);
 
-    // 6. Environment
-    createEnvironment();
+    const yellowLight = new THREE.PointLight(0xffaa00, 1500, 100);
+    yellowLight.position.set(0, 40, -50);
+    scene.add(yellowLight);
+
+    // Spot lights for dramatic effect
+    const spotLight1 = new THREE.SpotLight(0x00ffff, 3000);
+    spotLight1.position.set(50, 100, 50);
+    spotLight1.angle = Math.PI / 6;
+    spotLight1.penumbra = 0.5;
+    scene.add(spotLight1);
+
+    // 7. Environment
+    createWetGround();
+    createCyberpunkCity();
+    createNeonSigns();
     createRain();
 
-    // 7. Events
+    statusText.innerText = 'SYSTEM ONLINE :: NEON CITY';
+
+    // 8. Events
     window.addEventListener('resize', onWindowResize);
 
-    // 8. Loop
+    // 9. Loop
     renderer.setAnimationLoop(animate);
 }
 
-function createEnvironment() {
-    // Infinite Grid
-    const gridSize = 2000;
-    const gridDivisions = 300;
-    const gridColorCenter = 0xff00ff;
-    const gridColorGrid = 0x00aaff;
-
-    const grid = new THREE.GridHelper(gridSize, gridDivisions, gridColorCenter, gridColorGrid);
-    grid.position.y = -0.1;
-    grid.material.opacity = 0.3;
-    grid.material.transparent = true;
-    scene.add(grid);
-
-    // Buildings
-    const geometry = new THREE.BoxGeometry(1, 1, 1);
-    geometry.translate(0, 0.5, 0);
-
-    const material = new THREE.MeshStandardMaterial({
-        color: 0x050505,
-        roughness: 0.2,
-        metalness: 0.8,
-        emissive: 0x00ffff,
-        emissiveIntensity: 0.4
+function createWetGround() {
+    // Reflective wet ground
+    const groundGeometry = new THREE.PlaneGeometry(2000, 2000);
+    const groundMaterial = new THREE.MeshStandardMaterial({
+        color: 0x050510,
+        roughness: 0.1,
+        metalness: 0.9,
+        envMapIntensity: 1.5
     });
 
-    const count = 2000;
-    const mesh = new THREE.InstancedMesh(geometry, material, count);
+    const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = 0;
+    ground.receiveShadow = true;
+    scene.add(ground);
 
-    const dummy = new THREE.Object3D();
-    const _color = new THREE.Color();
+    // Neon Grid Lines
+    const gridSize = 2000;
+    const gridDivisions = 100;
 
-    for (let i = 0; i < count; i++) {
-        const x = (Math.random() - 0.5) * 400;
+    // Create custom grid with glowing lines
+    const gridMaterial = new THREE.LineBasicMaterial({
+        color: 0xff00ff,
+        transparent: true,
+        opacity: 0.4
+    });
+
+    const gridMaterial2 = new THREE.LineBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.3
+    });
+
+    const step = gridSize / gridDivisions;
+    const halfSize = gridSize / 2;
+
+    // Lines along X
+    for (let i = 0; i <= gridDivisions; i++) {
+        const geometry = new THREE.BufferGeometry();
+        const z = -halfSize + i * step;
+        const points = [
+            new THREE.Vector3(-halfSize, 0.01, z),
+            new THREE.Vector3(halfSize, 0.01, z)
+        ];
+        geometry.setFromPoints(points);
+        const line = new THREE.Line(geometry, i % 5 === 0 ? gridMaterial : gridMaterial2);
+        scene.add(line);
+    }
+
+    // Lines along Z
+    for (let i = 0; i <= gridDivisions; i++) {
+        const geometry = new THREE.BufferGeometry();
+        const x = -halfSize + i * step;
+        const points = [
+            new THREE.Vector3(x, 0.01, -halfSize),
+            new THREE.Vector3(x, 0.01, halfSize)
+        ];
+        geometry.setFromPoints(points);
+        const line = new THREE.Line(geometry, i % 5 === 0 ? gridMaterial : gridMaterial2);
+        scene.add(line);
+    }
+}
+
+function createCyberpunkCity() {
+    const buildingCount = 400;
+
+    for (let i = 0; i < buildingCount; i++) {
+        const x = (Math.random() - 0.5) * 500;
         const z = (Math.random() - 0.5) * 1000;
 
-        if (Math.abs(x) < 8) continue; // Wider path
+        // Leave space for the "road"
+        if (Math.abs(x) < 15) continue;
 
-        const sy = Math.random() * 30 + 5;
+        const width = Math.random() * 8 + 4;
+        const depth = Math.random() * 8 + 4;
+        const height = Math.random() * 60 + 10;
 
-        dummy.position.set(x, 0, z);
-        dummy.scale.set(Math.random() * 5 + 2, sy, Math.random() * 5 + 2);
-        dummy.updateMatrix();
+        createBuilding(x, z, width, depth, height);
+    }
+}
 
-        mesh.setMatrixAt(i, dummy.matrix);
+function createBuilding(x, z, width, depth, height) {
+    const group = new THREE.Group();
 
-        if (Math.random() > 0.9) {
-            mesh.setColorAt(i, _color.setHex(0xff00ff));
-        } else if (Math.random() > 0.9) {
-            mesh.setColorAt(i, _color.setHex(0x00ffff));
-        } else {
-            mesh.setColorAt(i, _color.setHex(0x111111));
+    // Main building body
+    const geometry = new THREE.BoxGeometry(width, height, depth);
+    geometry.translate(0, height / 2, 0);
+
+    // Dark material with slight emission
+    const material = new THREE.MeshStandardMaterial({
+        color: 0x0a0a15,
+        roughness: 0.7,
+        metalness: 0.3,
+    });
+
+    const building = new THREE.Mesh(geometry, material);
+    building.castShadow = true;
+    building.receiveShadow = true;
+    group.add(building);
+
+    // Add glowing windows
+    const windowRows = Math.floor(height / 4);
+    const windowCols = Math.floor(width / 2);
+
+    const windowColors = [0x00ffff, 0xff00ff, 0xffaa00, 0x00ff88, 0xff0066];
+
+    for (let row = 0; row < windowRows; row++) {
+        for (let col = 0; col < windowCols; col++) {
+            if (Math.random() > 0.6) continue; // Some windows off
+
+            const windowGeo = new THREE.PlaneGeometry(1, 2);
+            const windowMat = new THREE.MeshBasicMaterial({
+                color: windowColors[Math.floor(Math.random() * windowColors.length)],
+                transparent: true,
+                opacity: 0.8 + Math.random() * 0.2,
+                side: THREE.DoubleSide
+            });
+
+            const windowMesh = new THREE.Mesh(windowGeo, windowMat);
+
+            // Position windows on front face
+            const wx = -width / 2 + col * 2 + 1;
+            const wy = row * 4 + 3;
+            windowMesh.position.set(wx, wy, depth / 2 + 0.01);
+            group.add(windowMesh);
+
+            // Also on back face
+            const windowMesh2 = windowMesh.clone();
+            windowMesh2.position.z = -depth / 2 - 0.01;
+            group.add(windowMesh2);
         }
     }
 
-    scene.add(mesh);
-    cityGroup = mesh;
+    // Add edge lighting to some buildings
+    if (Math.random() > 0.7) {
+        const edgeMat = new THREE.MeshBasicMaterial({
+            color: Math.random() > 0.5 ? 0x00ffff : 0xff00ff,
+            transparent: true,
+            opacity: 0.9
+        });
+
+        // Vertical edge lights
+        const edgeGeo = new THREE.BoxGeometry(0.2, height, 0.2);
+        edgeGeo.translate(0, height / 2, 0);
+
+        const edge1 = new THREE.Mesh(edgeGeo, edgeMat);
+        edge1.position.set(width / 2, 0, depth / 2);
+        group.add(edge1);
+
+        const edge2 = new THREE.Mesh(edgeGeo, edgeMat);
+        edge2.position.set(-width / 2, 0, depth / 2);
+        group.add(edge2);
+
+        const edge3 = new THREE.Mesh(edgeGeo, edgeMat);
+        edge3.position.set(width / 2, 0, -depth / 2);
+        group.add(edge3);
+
+        const edge4 = new THREE.Mesh(edgeGeo, edgeMat);
+        edge4.position.set(-width / 2, 0, -depth / 2);
+        group.add(edge4);
+    }
+
+    // Rooftop lights
+    if (Math.random() > 0.5) {
+        const lightGeo = new THREE.SphereGeometry(0.5, 8, 8);
+        const lightMat = new THREE.MeshBasicMaterial({
+            color: Math.random() > 0.5 ? 0xff0000 : 0x00ff00
+        });
+        const roofLight = new THREE.Mesh(lightGeo, lightMat);
+        roofLight.position.set(0, height + 0.5, 0);
+        group.add(roofLight);
+    }
+
+    group.position.set(x, 0, z);
+    scene.add(group);
+}
+
+function createNeonSigns() {
+    const signPositions = [
+        { x: 20, y: 25, z: -30, text: '⚡', color: 0x00ffff, scale: 5 },
+        { x: -25, y: 35, z: -60, text: '★', color: 0xff00ff, scale: 6 },
+        { x: 35, y: 20, z: -100, text: '◆', color: 0xffaa00, scale: 4 },
+        { x: -40, y: 30, z: -150, text: '●', color: 0x00ff88, scale: 5 },
+        { x: 30, y: 40, z: -200, text: '■', color: 0xff0066, scale: 4 },
+    ];
+
+    signPositions.forEach(sign => {
+        // Create glowing billboard
+        const geo = new THREE.PlaneGeometry(sign.scale * 2, sign.scale);
+        const mat = new THREE.MeshBasicMaterial({
+            color: sign.color,
+            transparent: true,
+            opacity: 0.9,
+            side: THREE.DoubleSide
+        });
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.position.set(sign.x, sign.y, sign.z);
+        mesh.lookAt(0, sign.y, 1000);
+
+        // Add point light at sign position
+        const light = new THREE.PointLight(sign.color, 500, 50);
+        light.position.copy(mesh.position);
+        scene.add(light);
+
+        scene.add(mesh);
+        neonSigns.push({ mesh, originalY: sign.y, phase: Math.random() * Math.PI * 2 });
+    });
 }
 
 function createRain() {
-    const rainCount = 30000; // DOUBLE THE RAIN
-    const rainGeo = new THREE.BufferGeometry();
-    rainPositions = new Float32Array(rainCount * 3);
+    const rainCount = 50000;
+
+    // Create rain as lines (streaks) instead of points
+    const positions = new Float32Array(rainCount * 6); // 2 vertices per line
     rainVelocities = new Float32Array(rainCount);
 
     for (let i = 0; i < rainCount; i++) {
-        rainPositions[i * 3] = (Math.random() - 0.5) * 400;
-        rainPositions[i * 3 + 1] = Math.random() * 200;
-        rainPositions[i * 3 + 2] = (Math.random() - 0.5) * 400;
+        const x = (Math.random() - 0.5) * 400;
+        const y = Math.random() * 300;
+        const z = (Math.random() - 0.5) * 400;
 
-        rainVelocities[i] = 1.0 + Math.random() * 1.5; // Faster rain
+        const streakLength = 1 + Math.random() * 2;
+
+        // Start point
+        positions[i * 6] = x;
+        positions[i * 6 + 1] = y;
+        positions[i * 6 + 2] = z;
+
+        // End point (streak going down)
+        positions[i * 6 + 3] = x;
+        positions[i * 6 + 4] = y - streakLength;
+        positions[i * 6 + 5] = z;
+
+        rainVelocities[i] = 2 + Math.random() * 3;
     }
 
-    rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
+    const rainGeo = new THREE.BufferGeometry();
+    rainGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
-    const rainMat = new THREE.PointsMaterial({
-        color: 0x00ffff, // CYAN RAIN
-        size: 0.4,       // BIGGER DROPS
+    const rainMat = new THREE.LineBasicMaterial({
+        color: 0x8888ff,
         transparent: true,
-        opacity: 0.8,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false
+        opacity: 0.4,
+        blending: THREE.AdditiveBlending
     });
 
-    rainSystem = new THREE.Points(rainGeo, rainMat);
+    rainSystem = new THREE.LineSegments(rainGeo, rainMat);
     scene.add(rainSystem);
+
+    rainPositions = positions;
 }
 
 function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
 }
 
 function animate() {
     const time = clock.getElapsedTime();
+    const delta = clock.getDelta();
 
-    // Cinematic Camera Movement - FASTER
-    camera.position.z -= 0.8; // High speed
+    // Smooth camera movement
+    camera.position.z -= 0.5;
 
     if (camera.position.z < -400) {
         camera.position.z = 400;
     }
 
-    camera.position.x = Math.sin(time * 0.3) * 5; // Sway
-    camera.position.y = 5 + Math.sin(time * 0.5) * 2; // Bob
+    // Cinematic sway
+    camera.position.x = Math.sin(time * 0.2) * 8;
+    camera.position.y = 8 + Math.sin(time * 0.3) * 3;
+    camera.lookAt(0, 10, camera.position.z - 80);
 
-    // Look slightly ahead
-    camera.lookAt(0, 5, camera.position.z - 100);
+    // Animate neon signs (floating/pulsing)
+    neonSigns.forEach(sign => {
+        sign.mesh.position.y = sign.originalY + Math.sin(time * 2 + sign.phase) * 0.5;
+        sign.mesh.material.opacity = 0.7 + Math.sin(time * 3 + sign.phase) * 0.3;
+    });
 
-    // Animate Rain
+    // Animate rain
     const positions = rainSystem.geometry.attributes.position.array;
-    for (let i = 0; i < 30000; i++) {
-        positions[i * 3 + 1] -= rainVelocities[i];
+    const rainCount = rainVelocities.length;
 
-        if (positions[i * 3 + 1] < 0) {
-            positions[i * 3 + 1] = 200;
-            // Lock rain to camera X/Z to simulate infinite storm
-            positions[i * 3] = camera.position.x + (Math.random() - 0.5) * 300;
-            positions[i * 3 + 2] = camera.position.z + (Math.random() - 0.5) * 300;
+    for (let i = 0; i < rainCount; i++) {
+        const vel = rainVelocities[i];
+
+        // Move both vertices (start and end of streak)
+        positions[i * 6 + 1] -= vel;
+        positions[i * 6 + 4] -= vel;
+
+        // Reset when below ground
+        if (positions[i * 6 + 1] < 0) {
+            const newY = 300;
+            const streakLength = 1 + Math.random() * 2;
+
+            positions[i * 6 + 1] = newY;
+            positions[i * 6 + 4] = newY - streakLength;
+
+            // Reposition near camera
+            positions[i * 6] = camera.position.x + (Math.random() - 0.5) * 300;
+            positions[i * 6 + 2] = camera.position.z + (Math.random() - 0.5) * 300;
+            positions[i * 6 + 3] = positions[i * 6];
+            positions[i * 6 + 5] = positions[i * 6 + 2];
         }
     }
     rainSystem.geometry.attributes.position.needsUpdate = true;
 
-    renderer.render(scene, camera);
+    controls.update();
+
+    // Use composer (with bloom) instead of direct renderer
+    composer.render();
 }
